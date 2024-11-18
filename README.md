@@ -16,14 +16,10 @@ This directory contains all the scripts used to simulate the different scenarios
       1. Shuffled haplotypes in the reference panel.
       2. Inclusion of the target individual's haplotypes in the reference panel in either the same individual or across two different individuals.
 
-## 2. Unique Genotype Stats
+## 2. Unique genotype stats
 
 This directory contains the fractions of unique genotypes across the 100 different starting locations on chromosome 1, generated with different settings.
 
-## 3. 1kGP
+## 3. 1kGP SFS
 
 This directory contains output from the 1kGP analysis, including allele frequency distributions for each of the CEU and YRI subpopulations.
-
-## Contact
-
-For questions, issues, or contributions, please reach out through the GitHub repository's issue tracker or directly via email.
