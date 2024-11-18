@@ -1,12 +1,11 @@
-#5/14/24
+#10/15/24
 #Code to simulate and analyze diploid individuals
 #under the IBDGem model.
 
-set.seed(8675309)
-
+set.seed(49049583)
 ############################### simulate reference panels
 
-getsims <- function(n, k, eps, p = p, nsim,number_of_reads,snp_matrix,order_number,target_genotype_k,reads){
+getsims <- function(n, k, eps, nsim,number_of_reads,snp_matrix,order_number,target_genotype_k,reads,loci_frequency){
   
   new_directory_name <- paste0("n", n, "_k", k,"_r",number_of_reads,"_order",order_number)
   new_directory <- file.path(directory, new_directory_name)
@@ -22,7 +21,7 @@ getsims <- function(n, k, eps, p = p, nsim,number_of_reads,snp_matrix,order_numb
   # Extract position information from snp_matrix (replace snp_matrix$position with your actual data)
   pos <- as.numeric(snp_matrix[,"pos"])
   # Set frequency value
-  freq <- rep(p, k)
+  freq <- loci_frequency
   
   # Create a data frame with CHR, POS, and FREQ
   my_table <- data.frame(CHR = chr, POS = pos, FREQ = freq)
@@ -42,7 +41,7 @@ getsims <- function(n, k, eps, p = p, nsim,number_of_reads,snp_matrix,order_numb
     dir.create(file.path(new_sub_directory, "output_non_LD"))
     
     #to generate .hap file
-    genotypes <- cbind(do.call(cbind, lapply(1:(n-1), function(x) generate_genotype(k))), target_genotype_k)
+    genotypes <- cbind(do.call(cbind, lapply(1:(n-1), function(x) generate_genotype_panel(k,loci_frequency)$ref.test)), target_genotype_k)
     
     #save the .hap file
     write.table(genotypes, file = "test.hap", sep = " ", quote = FALSE, row.names = FALSE, col.names = FALSE)
@@ -163,55 +162,48 @@ generate_reads <- function(target_genotype, readnumber ,epsilon,k) {
   return(reads)
 }
 
-# function to generate the genotype
-generate_genotype <- function(k) {
+# generating genotype(s) that obey(s) allele frequencies derived from CEU SFS
+
+#generate n.loci allele frequencies from CEU SFS that
+#would arise for a sample of size n.step
+gen.realistic.sfs <- function(n.loci, sfs, n.step){
+  cdf <- cumsum(sfs)
+  percs <- runif(n.loci, 0 , 1)
+  get.cdfind <- function(perc){
+    (sum(cdf <= perc) + 1)/n.step
+  }
+  sapply(percs, get.cdfind)
+}
+
+#simulates a gentoype with alleles at frequencies
+#in the vector ps, all in linkage equilibrium
+sim.ref.varfreq.diploid <- function(n, ps) {
+  hap1 <- matrix(rbinom(n * length(ps), 1, ps), ncol = n)
+  hap2 <- matrix(rbinom(n * length(ps), 1, ps), ncol = n)
+  diploid_genotypes <- cbind(hap1,hap2)
+  return(diploid_genotypes)
+}
+# read in the allele frequencies derived from CEU subpopulation in 1kGP
+ceu_sfs <- read.table("ceu_sfs.txt", header = FALSE, col.names = "value")$value
+
+generate_genotype <- function(k,ceu_sfs) {
   if (k == 1) {
     # For k = 1, just generate a single genotype randomly
-    matrix( sample( c(0,1), 2, replace = TRUE ), nrow = 1, ncol = 2 )
+    return(list(ref.test =matrix( sample( c(0,1), 2, replace = TRUE ), nrow = 1, ncol = 2 ),ps=0.5))
   } else {
-    # For k > 1
-    matrix <- matrix( NA, nrow = k, ncol = 2 )
-    if (k %% 2 == 0) {
-      # If k is even, proceed with the original logic
-      half_rows <- sample( 1:k, k/2, replace = FALSE )
-      matrix[half_rows, ] <- matrix( sample( c(0, 1), 2 * (k/2), replace = TRUE ), ncol = 2 )
-      matrix[-half_rows, ] <- matrix( replicate( 2, sample( c(0, 1), k/2, replace = TRUE ) ), ncol = 2 )
-    } else {
-      # If k is odd, randomly select (k-1)/2 rows and fill them randomly
-      half_rows <- sample( 1:k, (k-1)/2, replace = FALSE )
-      matrix[half_rows, ] <- matrix( sample( c(0, 1), 2 * ((k-1)/2), replace = TRUE ), ncol = 2 )
-      # The remaining row will be filled with 0 for the first column and 1 for the second column
-      remaining_row <- setdiff(1:k, half_rows)
-      matrix[remaining_row, ] <- c(0, 1)
-    }
-    return(matrix)
+    ps <- gen.realistic.sfs(k, ceu_sfs,length(ceu_sfs))
+    ref.test <- sim.ref.varfreq.diploid(1, ps)
+    return(list(ref.test=ref.test,ps=ps))
   }
 }
-
-# function to calculate the number of each type of genotype (00,10/01,11)
-calculate_counts <- function(target_genotype) {
-  count_01_10 <- sum(target_genotype[, 1] != target_genotype[, 2])
-  count_00 <- sum(target_genotype[, 1] == 0 & target_genotype[, 2] == 0)
-  count_11 <- sum(target_genotype[, 1] == 1 & target_genotype[, 2] == 1)
-  
-  return(list(count_01_10 = count_01_10, count_00 = count_00, count_11 = count_11))
-}
-
-# function to get the indices for k=50
-sample_indices <- function(target_genotype, num_samples) {
-  indices_00 <- which(target_genotype[, 1] == 0 & target_genotype[, 2] == 0)
-  indices_11 <- which(target_genotype[, 1] == 1 & target_genotype[, 2] == 1)
-  indices_10_01 <- which(target_genotype[, 1] != target_genotype[, 2])
-  
-  sampled_indices_00 <- sample(indices_00, num_samples[1])
-  sampled_indices_11 <- sample(indices_11, num_samples[2])
-  sampled_indices_10_01 <- sample(indices_10_01, num_samples[3])
-  
-  sampled_indices <- list(indices_00 = sampled_indices_00,
-                          indices_11 = sampled_indices_11,
-                          indices_10_01 = sampled_indices_10_01)
-  
-  return(sampled_indices)
+generate_genotype_panel <- function(k,ps) {
+  if (k == 1) {
+    # For k = 1, just generate a single genotype randomly
+    return(list(ref.test =matrix( sample( c(0,1), 2, replace = TRUE ), nrow = 1, ncol = 2 ),ps=0.5))
+  } else {
+    ref.test <- sim.ref.varfreq.diploid(1, ps)
+    return(list(ref.test=ref.test,ps=ps))
+  }
 }
 
 # function to simulate the reads for the target
@@ -220,7 +212,7 @@ simulate_reads_for_target <- function(target_genotype,eps,number_of_reads,k){
   return(reads)
 }
 
-# function to simulate .legend file (necessary for IBDGem input)
+# function to simulate .legend file
 simulate_legend_file <- function(k){
   # Generate IDs 
   IDs <- paste("SNP", 1:k, sep = "")
@@ -243,43 +235,31 @@ simulate_legend_file <- function(k){
   return(snp_matrix)
 }
 
-############################### simulate the genotype and reads for the target individuals with the default parameters being k = 100 and number of reads = 2.
-# Generate target genotypes
-target_genotype_100_loci <- generate_genotype(k=100)
+############################### simulate the genotype and reads for the target individuals
+# Generate target genotype, its allele frequency file and the snp_matrix file
+result <- generate_genotype(k=500,ceu_sfs)
+target_genotype_500_loci <- result$ref.test
+loci_frequency <- result$ps
+snp_matrix_500_loci <- simulate_legend_file(k=500)
 
-# Define the number of samples for each genotype
-num_samples <- c(12, 13, 25)
-
-# Sample indices
-sampled_indices <- sample_indices(target_genotype_100_loci, num_samples)
-
-target_genotype_50_loci <- rbind(target_genotype_100_loci[sampled_indices$indices_00, ],
-                                 target_genotype_100_loci[sampled_indices$indices_11, ],
-                                 target_genotype_100_loci[sampled_indices$indices_10_01, ])
-
-
-# generate the snp matrix (.legend file)
-snp_matrix_100_loci <- simulate_legend_file(k=100)
-
-#indices we extracted 
+# Sample indices uniformly at random to form the target genotype's at k=100 loci
+sampled_indices <- sample(1:nrow(target_genotype_500_loci), 100, replace=FALSE)
+target_genotype_100_loci <- target_genotype_500_loci[sampled_indices, ]
+#indices we extracted -- now ordered and unlisted
 indices <- sort(unlist(sampled_indices,use.names=FALSE))
-snp_matrix_sampled_50_loci <- snp_matrix_100_loci[indices,]
-
-# generate the reads for the target genotype when k = 50
-reads_50 <- simulate_reads_for_target(target_genotype_50_loci,eps=0.02,number_of_reads=2,k=50)
+snp_matrix_sampled_100_loci <- snp_matrix_500_loci[indices,]
+# generate the reads for the target genotype when k = 100
+reads_100 <- simulate_reads_for_target(target_genotype_100_loci,eps=0.02,number_of_reads=2,k=100)
+loci_frequency_100 <- loci_frequency[indices]
 
 ############################### simulate different scenarios
-nvals <- c(10, 50, 100, 200, 400, 600, 800, 1000)
-kvals <- c(1,25, 50, 75, 100)
-readvals <- c(1,2,4,6,8,10)
+nvals <- c(10, 50, 100, 200, 400, 600, 800, 1000,2000,3000,4000,5000)
+kvals <- c(1,50, 100, 200, 300)
+readvals <- c(1,2,4,6,8)
 nsim <- 100
 epsvals <- c(1e-4, 1e-3, .01, .02, .05, 0.1, 0.2)
 
-################## Starting with the cases where k is set to 50 (varying n, varying number of reads)
-current_directory <- getwd()
-
-
-################## Vary the reference panel size according to nvals while k is set to 50 with number of reads exactly 2
+################## Vary the reference panel size according to nvals while k is set to 100 with number of reads exactly 2
 directory_name <- "reference_panel"
 directory <- file.path(current_directory, directory_name)
 dir.create(directory)
@@ -287,10 +267,10 @@ setwd(directory)
 
 for(i in 1:length(nvals)){
   n <- nvals[i]
-  getsims(n, k = 50, eps = 0.02, p = 0.5, nsim = nsim,number_of_reads=2,snp_matrix_sampled_50_loci,order_number=i,target_genotype_50_loci,reads = reads_50)
+  getsims(n, k = 100, eps = 0.02, nsim = nsim,number_of_reads=2,snp_matrix_sampled_100_loci,order_number=i,target_genotype_100_loci,reads = reads_100,loci_frequency_100)
 }
 
-##################  Vary the number of reads for the target genotype while n = 100 and k = 50
+##################  Vary the number of reads for the target genotype while n = 100 and k = 100
 
 directory_name <- "read_numbers"
 directory <- file.path(current_directory, directory_name)
@@ -299,70 +279,59 @@ setwd(directory)
 
 for (i in 1:length(readvals)){
   r <- readvals[i]
-  generated_reads <- simulate_reads_for_target(target_genotype_50_loci,eps=0.02,number_of_reads=r,k=50)
-  getsims(n=100, k = 50, eps = 0.02, p = 0.5, nsim = nsim,number_of_reads=r,snp_matrix_sampled_50_loci,order_number=i,target_genotype_50_loci,reads = generated_reads)
+  generated_reads <- simulate_reads_for_target(target_genotype_100_loci,eps=0.02,number_of_reads=r,k=100)
+  getsims(n=100, k = 100, eps = 0.02, nsim = nsim,number_of_reads=r,snp_matrix_sampled_100_loci,order_number=i,target_genotype_100_loci,reads = generated_reads,loci_frequency_100)
 }
 
-##################  Vary the number of loci according to kvals while n is set to 100, p=0.5, eps=0.02, number of reads = 2
+##################  Vary the number of loci according to kvals while n is set to 100, eps=0.02, number of reads = 2
 
-#distinguish heterozygous loci from homozygous loci
-hets_indices <- which((target_genotype_100_loci[, 1] == 0 & target_genotype_100_loci[, 2] == 1) |
-                        (target_genotype_100_loci[, 1] == 1 & target_genotype_100_loci[, 2] == 0))
-
-homs_indices <- which(target_genotype_100_loci[, 1] == target_genotype_100_loci[, 2])
-
-
-loci_to_sample <- c(25, 75)
+loci_to_sample <- c(50, 200,300)
 # Initialize lists to store the results
 target_genotypes <- list()
 snp_matrices <- list()
+loci_freq_matrices <- list()
 
 #sample 1 locus for target genotype
-sampled_index <- sample(nrow(target_genotype_100_loci), 1)
-target_genotype_1_loci <- matrix(unlist(target_genotype_100_loci[sampled_index, ]), nrow = 1, ncol = 2)
-snp_matrix_sampled_1_loci <- snp_matrix_100_loci[sampled_index,,drop=FALSE]
-
+sampled_index <- sample(nrow(target_genotype_500_loci), 1)
+target_genotype_1_loci <- matrix(unlist(target_genotype_500_loci[sampled_index, ]), nrow = 1, ncol = 2)
+snp_matrix_sampled_1_loci <- snp_matrix_500_loci[sampled_index,,drop=FALSE]
+loci_frequency_1_loci <- loci_frequency[sampled_index]
 target_genotypes[["target_genotype_1_loci"]] <- target_genotype_1_loci
 snp_matrices[["snp_matrix_sampled_1_loci"]] <- snp_matrix_sampled_1_loci
-
-# we already have 50 loci defined
-target_genotypes[["target_genotype_50_loci"]] <- target_genotype_50_loci
-snp_matrices[["snp_matrix_sampled_50_loci"]] <- snp_matrix_sampled_50_loci
+loci_freq_matrices[["loci_frequency_1_loci"]] <- loci_frequency_1_loci
 
 # we already have 100 loci defined
 target_genotypes[["target_genotype_100_loci"]] <- target_genotype_100_loci
-snp_matrices[["snp_matrix_sampled_100_loci"]] <- snp_matrix_100_loci
+snp_matrices[["snp_matrix_sampled_100_loci"]] <- snp_matrix_sampled_100_loci
+loci_freq_matrices[["loci_frequency_100_loci"]] <- loci_frequency_100
+
 
 # Loop through each number of loci to sample
 for (num_loci in loci_to_sample) {
-  # Sample indices for hets and homs
-  sampled_index_hets <- sample(hets_indices, num_loci %/% 2)
-  sampled_index_homs <- sample(homs_indices, num_loci - (num_loci %/% 2))
-  
-  # Extract sampled hets and homs
-  sampled_hets <- target_genotype_100_loci[sampled_index_hets, ]
-  sampled_homs <- target_genotype_100_loci[sampled_index_homs, ]
+  # Sample indices to satisfy the num_loci
+  sampled_indices <- sample(1:nrow(target_genotype_500_loci), num_loci, replace=FALSE)
   
   # Combine sampled hets and homs into target genotype
-  target_genotypes[[paste0("target_genotype_", num_loci, "_loci")]] <- rbind(sampled_hets, sampled_homs)
+  target_genotypes[[paste0("target_genotype_", num_loci, "_loci")]] <- target_genotype_500_loci[sampled_indices, ]
   
-  # Combine sampled indices
-  sampled_indices <- sort(c(sampled_index_hets, sampled_index_homs))
-  
+  indices <- sort(unlist(sampled_indices,use.names=FALSE))
   # Extract corresponding snp matrix
-  snp_matrices[[paste0("snp_matrix_sampled_", num_loci, "_loci")]] <- snp_matrix_100_loci[sampled_indices, , drop=FALSE]
+  snp_matrices[[paste0("snp_matrix_sampled_", num_loci, "_loci")]] <- snp_matrix_500_loci[indices,]
+  
+  # Extract corresponding allele frequencies for selected subsetted loci
+  loci_freq_matrices[[paste0("loci_frequency_", num_loci, "_loci")]] <- loci_frequency[indices]
 }
 
 
-#simulate reads for k=1,k=25,k=50,k=75,k=100
+#simulate reads for k=1,k=50,k=200,k=300(k=100 already simulated reads)
 # Define the list of k values
-k_values <- c(1, 25, 75, 100)
+k_values <- c(1, 50, 200,300)
 
 # Initialize an empty list to store the reads
 reads_list <- list()
 
-#add reads generated for 50 loci earlier 
-reads_list[[as.character(50)]] <- reads_50
+#add reads generated for 100 loci earlier 
+reads_list[[as.character(100)]] <- reads_100
 
 # Loop through each k value and simulate reads
 for (k in k_values) {
@@ -375,16 +344,17 @@ directory <- file.path(current_directory, directory_name)
 dir.create(directory)
 setwd(directory)
 
-for (i in 1:5) {
+for (i in 1:length(kvals)) {
   k <- kvals[i]
   target_name <- paste0("target_genotype_", k, "_loci")
   snp_matrix_name <- paste0("snp_matrix_sampled_", k, "_loci")
-  getsims(n = 100, k = k, eps = 0.02, p = 0.5, nsim = nsim, number_of_reads = 2,
+  locifreq_name <- paste0("loci_frequency_",k,"_loci")
+  getsims(n = 100, k = k, eps = 0.02, nsim = nsim, number_of_reads = 2,
           snp_matrix = snp_matrices[[snp_matrix_name]], order_number = i, target_genotype_k = target_genotypes[[target_name]],
-          reads = reads_list[[as.character(k)]])
+          reads = reads_list[[as.character(k)]],loci_frequency = loci_freq_matrices[[locifreq_name]])
 }
 
-##################  Vary the sequencing error rates using epsvals while n is set to 100, k=50, p=1/2, number of reads = 2
+##################  Vary the sequencing error rates using epsvals while n is set to 100, k=100, number of reads = 2
 directory_name <- "error_rate"
 directory <- file.path(current_directory, directory_name)
 dir.create(directory)
@@ -392,8 +362,8 @@ setwd(directory)
 
 for (i in 1:length(epsvals)){
   eps <- epsvals[i]
-  reads <- reads_50
-  getsims(n = 100, k = 50, eps = eps, p = 0.5, nsim = nsim,number_of_reads=2,snp_matrix=snp_matrix_sampled_50_loci,order_number=i,target_genotype_k = target_genotype_50_loci,reads = reads_50)
+  reads <- reads_100
+  getsims(n = 100, k = 100, eps = eps, nsim = nsim,number_of_reads=2,snp_matrix=snp_matrix_sampled_100_loci,order_number=i,target_genotype_k = target_genotype_100_loci,reads = reads_100,loci_frequency_100)
 }
 
 ############################### Run IBDGem on inputs from above scenarios
@@ -405,13 +375,13 @@ system("run_ibdgem.sh")
 ################## Functions to get the likelihood ratios under both LD and non-LD modes and plot results
 generate_main_directory <- function(list_name, list_element, base_directory, i,type) {
   if (type == "e") {
-    main_directories <- file.path(base_directory, paste0("n100_k50_r2_order", i))
+    main_directories <- file.path(base_directory, paste0("n100_k100_r2_order", i))
   } else if (type == "k") {
     main_directories <- file.path(base_directory, paste0("n100_k", list_element, "_r2_order", i))
   } else if (type == "n") {
-    main_directories <- file.path(base_directory, paste0("n", list_element, "_k50_r2_order", i))
+    main_directories <- file.path(base_directory, paste0("n", list_element, "_k100_r2_order", i))
   } else if (type == "r") {
-    main_directories <- file.path(base_directory, paste0("n100_k50_r", list_element, "_order", i))
+    main_directories <- file.path(base_directory, paste0("n100_k100_r", list_element, "_order", i))
   }
   return(main_directories)
 }
@@ -451,6 +421,7 @@ run_summary <- function(base_directory,xvals, type){
     }else{
       n <- 100
     }
+    
     read_summary_file <- function(directory) {
       summary_file <- file.path(directory, paste0("sample", n, ".","sample",n,".summary.txt"))
       if (file.exists(summary_file)) {
@@ -544,33 +515,34 @@ plot_results <- function(xvals, df, xlab, ylab, main,xlim=NULL) {
 
 ################## When we vary the panel size
 
-base_directory <- "/Users/ouerghi1/reference_panel/"
+pdf("FigS2.pdf", width = 8, height = 6)
+par(mfrow = c(2,2), mar = c(4.1, 4.1, 1.1, 1.1), mgp = c(2.2, 0.8, 0))
+
+
+base_directory <- "reference_panel"
 df_list <- run_summary(base_directory,nvals,"n")
 compressed_dataframes <- lapply(df_list, compress_and_modify)
 combined_df <- do.call(cbind, compressed_dataframes)
 
-pdf("Fig4.pdf", width = 8, height = 6)
-par(mfrow = c(2,2), mar = c(4.1, 4.1, 1.1, 1.1), mgp = c(2.2, 0.8, 0))
-
 plot_results(nvals, combined_df,
-             "reference panel size", "log likelihood ratio (base 10)", "A",xlim=c(0,max(nvals)))
+                             "reference panel size", "log likelihood ratio (base 10)", "A",xlim=c(0,max(nvals)))
 
 ################## When we vary the number of reads
 
-base_directory <- "read_numbers/"
+base_directory <- "read_numbers"
 df_list <- run_summary(base_directory,readvals,"r")
 compressed_dataframes <- lapply(df_list, compress_and_modify)
 combined_df <- do.call(cbind, compressed_dataframes)
+
 plot_results(readvals, combined_df,
              "number of reads per site", "log likelihood ratio (base 10)", "B",xlim= range(c(0,readvals)))
 
-
 ################## When we vary the number of loci
-
-base_directory <- "loci_number/"
+base_directory <- "loci_number"
 df_list <- run_summary(base_directory,kvals,"k")
 compressed_dataframes <- lapply(df_list, compress_and_modify)
 combined_df <- do.call(cbind, compressed_dataframes)
+
 plot_results(kvals, combined_df,
              "number of loci", "log likelihood ratio (base 10)", "C",xlim= range(c(0,kvals)))
 
@@ -578,13 +550,12 @@ legend("topleft", pch = c(19,19,26, 26), col = c("black", "#7570b3", "#7570b3", 
 
 ################## When we vary the error rate
 
-base_directory <- "error_rate/"
+base_directory <- "error_rate"
 df_list <- run_summary(base_directory,epsvals,"e")
 compressed_dataframes <- lapply(df_list, compress_and_modify)
 combined_df <- do.call(cbind, compressed_dataframes)
 plot_results(log10(epsvals), combined_df,
              "log sequencing error rate (base 10)", "log likelihood ratio (base 10)", "D",xlim= range(c(0,log10(epsvals))))
-
 
 dev.off()
 

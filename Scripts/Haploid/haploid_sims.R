@@ -1,7 +1,6 @@
-#5/14/24
+#10/15/24
 #Code to simulate and analyze haploid individuals
 #under the IBDGem model.
-
 
 #########################################################
 #Table 1 and example
@@ -97,21 +96,21 @@ getsims.log10 <- function(n, k, eps, p = 0.5, nsim = 100){
 # Function to simulate data
 run_simulations <- function(vals, param = "n",epsilon,kval) {
   lr.f <- numeric(length(vals))
-  lr.n <- matrix(ncol = length(vals), nrow = n_sim)
+  lr.n <- matrix(ncol = length(vals), nrow = nsim)
   
   for(i in 1:length(vals)){
     if (param == "n") {
       n <- vals[i]
-      sim <- getsims.log10(n, k = kval, eps = epsilon, p = 0.5, nsim = n_sim)
+      sim <- getsims.log10(n, k = kval, eps = epsilon, p = 0.5, nsim = nsim)
     } else if (param == "p") {
       p <- vals[i]
-      sim <- getsims.log10(n = 100, k = kval, eps = epsilon, p = p, nsim = n_sim)
+      sim <- getsims.log10(n = 100, k = kval, eps = epsilon, p = p, nsim = nsim)
     } else if (param == "k") {
       k <- vals[i]
-      sim <- getsims.log10(n = 100, k = k, eps = epsilon, p = 0.5, nsim = n_sim)
+      sim <- getsims.log10(n = 100, k = k, eps = epsilon, p = 0.5, nsim = nsim)
     } else if (param == "eps") {
       eps <- vals[i]
-      sim <- getsims.log10(n = 100, k = kval, eps = eps, p = 0.5, nsim = n_sim)
+      sim <- getsims.log10(n = 100, k = kval, eps = eps, p = 0.5, nsim = nsim)
     } else {
       stop("Invalid parameter specified")
     }
@@ -137,20 +136,22 @@ plot_results <- function(xvals, lr.f, lr.n, xlab, ylab, main,xlim=NULL) {
 }
 
 # Values of n, p, k, and epsilon to plot in figures
-nvals <- c(10, 50, 100, 200, 400, 600, 800, 1000)
+nvals <- c(10, 50, 100, 200, 400, 600, 800, 1000,2000,3000,4000,5000)
 pvals <- c(0.1, 0.3, 0.5, 0.7, 0.9)
 kvals <- c(1, 25, 50, 75, 100)
 epsvals <- c(1e-4, 1e-3, 1e-2, .02, .05, 0.1, 0.2)
-n_sim <- 100
+nsim <- 100
 
 pdf("Fig1.pdf", width = 8, height = 6)
 par(mfrow = c(2, 2), mar = c(4.1, 4.1, 1.1, 1.1), mgp = c(2.2, 0.8, 0))
 
 # Plot reference panel size results
 result_nvals <- run_simulations(nvals, param = "n",eps=0.02,kval=50)
+
 plot_results(nvals, result_nvals$lr.f, 
              result_nvals$lr.n, 
              "reference panel size", "log likelihood ratio (base 10)", "A")
+
 
 # Plot allele frequency results
 result_pvals <- run_simulations(pvals, param = "p",eps=0.02,kval=50)
@@ -176,51 +177,8 @@ plot_results(log10(epsvals), result_epsvals$lr.f,
 
 dev.off()
 
-
 ##################################################
-#Figure 2 --- similar to figure 1, but with smaller numbers of loci
-
-set.seed(8675309)
-
-nvals <- c(1:16)*25
-pvals <- c(0.1, 0.3, 0.5, 0.7, 0.9)
-kvals <- c(1:8)
-epsvals <- c(1e-4, 1e-3, 1e-2, .02, .05, 0.1, 0.2)
-
-pdf("Fig2.pdf", width = 8, height = 6)
-par(mfrow = c(2, 2), mar = c(4.1, 4.1, 1.1, 1.1), mgp = c(2.2, 0.8, 0))
-
-# Plot reference panel size results
-result_nvals <- run_simulations(nvals, param = "n",eps=0.001,kval=6)
-plot_results(nvals, result_nvals$lr.f, 
-             result_nvals$lr.n, 
-             "reference panel size", "log likelihood ratio (base 10)", "A",xlim=c(0,400))
-
-# Plot allele frequency results
-result_pvals <- run_simulations(pvals, param = "p",eps=0.001,kval=6)
-plot_results(1 - pvals, result_pvals$lr.f, 
-             result_pvals$lr.n, 
-             "frequency of individual-of-interest allele", 
-             "log likelihood ratio (base 10)", "B",xlim = c(0,1))
-
-legend("topright", pch = c(19,19,26,26), col = c("black", "#7570b3", "#7570b3", "#7570b3"), lty = c(0,0,1,2), legend = c("Standard LR", "IBDGem LR (simulated)", "mean log(IBDGem LR)", "mean IBDGem LR"), bty = "n")
-
-# Plot number of loci results
-result_kvals <- run_simulations(kvals, param = "k",eps=0.001,kval=6)
-plot_results(kvals, result_kvals$lr.f, 
-             result_kvals$lr.n, 
-             "number of loci", "log likelihood ratio (base 10)", "C")
-
-# Plot error rate results
-result_epsvals <- run_simulations(epsvals, param = "eps",eps=0.001,kval=6)
-plot_results(log10(epsvals), result_epsvals$lr.f, 
-             result_epsvals$lr.n, 
-             "log sequencing error rate (base 10)", 
-             "log likelihood ratio (base 10)", "D")
-
-dev.off()
-
-#Figure 3---haploid LD
+#Figure 3 
 
 #A version of getsims for the 'perfect LD blocks of m loci' model
 #in addition to likelihood ratios based on a reference panel and based 
@@ -238,7 +196,7 @@ getsims.log10.mcopies <- function(n, k, eps, m = 1, p = 0.5, nsim = 100){
   for(i in 1:nsim){
     ref <- sim.ref(n, k, p)
     ref.rep <- matrix(rep(ref, m), nrow = nrow(ref))
-    PDRs.log10[i] <- PDR.log10(ref, eps) 
+    PDRs.log10[i] <- PDR.log10(ref.rep, eps) 
   }
   return(c( PD.I.log10 - PD.U.log10, PD.I.log10 - PD.U.log10.unlinked, PD.I.log10 - PDRs.log10 ))
 }
@@ -271,9 +229,6 @@ getsims.log10.caterpillar <- function(n, k, eps, nsim = 100){
   }
   return(c( PD.I.log10 - PD.U.log10, PD.I.log10 - PD.U.log10.unlinked, PD.I.log10 - PDRs.log10 ))
 }
-
-
-set.seed(8675309)
 
 #function to simulate the data
 run_simulations_2 <- function(vals,kval=NULL,n,param) {
@@ -325,7 +280,7 @@ pdf("Fig3.pdf", width = 8, height = 6)
 par(mfrow = c(2,2), mar = c(4.1, 4.1, 1.1, 1.1), mgp = c(2.2, 0.8, 0))
 
 mvals <- 1:4
-results_mvals_50 <- run_simulations_2(mvals,n=100,k=50,param="m")
+results_mvals_50 <- run_simulations_2(mvals,n=5000,k=50,param="m")
 
 plot_results_2(mvals, results_mvals_50$lr.f, 
                results_mvals_50$lr.n, 
@@ -335,7 +290,7 @@ axis(1, at = c(1,2,3,4))
 
 
 #Repeat, but with lower k
-results_mvals_5 <- run_simulations_2(mvals,n=100,k=5,param="m")
+results_mvals_5 <- run_simulations_2(mvals,n=5000,k=5,param="m")
 plot_results_2(mvals, results_mvals_5$lr.f, 
                results_mvals_5$lr.n, 
                results_mvals_5$lr.unlinked,
@@ -366,6 +321,3 @@ plot_results_2(kvals, results_kvals_higher_n$lr.f,
 axis(1, at = seq(0, 100, by = 20))
 
 dev.off()
-
-
-

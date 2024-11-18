@@ -1,15 +1,7 @@
 #!/bin/bash
 
 # Define the directories containing the subdirectories
-main_directories=(
-    "/error_rate/n100_k50_r2_order1"
-    "/error_rate/n100_k50_r2_order2"
-    "/error_rate/n100_k50_r2_order3"
-    "/error_rate/n100_k50_r2_order4"
-    "/error_rate/n100_k50_r2_order5"
-    "/error_rate/n100_k50_r2_order6"
-    "/error_rate/n100_k50_r2_order7"
-)
+main_directories=($(find "/$HOME/error_rate" -mindepth 1 -maxdepth 1 -type d))
 
 # Define the error rates corresponding to each order number
 error_rates=(0.0001 0.001 0.01 0.02 0.05 0.1 0.2)
@@ -29,11 +21,15 @@ for main_directory in "${main_directories[@]}"; do
             sample_value="sample$n_value"
             # Get the corresponding error rate for the order number
             error_rate=${error_rates[$((order_number - 1))]}
+
+            echo "the error rate is $error_rate"
+
             # Run the ibdgem command
-            ./IBDGem-2.0.2/ibdgem -H "$subdir/test.hap" -L "$subdir/test.legend" -I "$subdir/test.indv" -P "$subdir/unknowndna.pileup" -N "$sample_value" -O "$subdir/output_non_LD" --allele-freqs "$subdir/output.frq" --error-rate "$error_rate"
-            ./IBDGem-2.0.2/ibdgem --LD -H "$subdir/test.hap" -L "$subdir/test.legend" -I "$subdir/test.indv" -P "$subdir/unknowndna.pileup" -N "$sample_value" -O "$subdir/output_LD" --allele-freqs "$subdir/output.frq" --error-rate "$error_rate"
+            ./IBDGem-2.0.2/ibdgem -H "$subdir/test.hap" -L "$subdir/test.legend" -I "$subdir/test.indv" -P "$subdir/unknowndna.pileup" -N "$sample_value" -O "$subdir/output_non_LD" --allele-freqs "$subdir/output.frq" --error-rate "$error_rate" --sample "$sample_value"
+            ./IBDGem-2.0.2/ibdgem --LD -H "$subdir/test.hap" -L "$subdir/test.legend" -I "$subdir/test.indv" -P "$subdir/unknowndna.pileup" -N "$sample_value" -O "$subdir/output_LD" --allele-freqs "$subdir/output.frq" --error-rate "$error_rate" --sample "$sample_value"
         else
             echo "Files not found in $subdir"
         fi
     done
 done
+

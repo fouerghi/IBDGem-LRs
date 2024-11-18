@@ -1,17 +1,9 @@
 #!/bin/bash
 
 # Define the directories containing the subdirectories
-main_directories=(
-    "/reference_panel/n10_k50"
-    "/reference_panel/n50_k50"
-    "/reference_panel/n100_k50"
-    "/reference_panel/n200_k50"
-    "/reference_panel/n400_k50"
-    "/reference_panel/n600_k50"
-    "/reference_panel/n800_k50"
-    "/reference_panel/n1000_k50"
-)
- 
+main_directories=($(find "/$HOME/read_numbers" -mindepth 1 -maxdepth 1 -type d))
+
+
 # Loop through each main directory
 for main_directory in "${main_directories[@]}"; do
     # Get the value of n from the directory name
@@ -25,8 +17,8 @@ for main_directory in "${main_directories[@]}"; do
             sample_value="sample$n_value"
 
             # Run the ibdgem command
-            ./IBDGem-2.0.2/ibdgem -H "$subdir/test.hap" -L "$subdir/test.legend" -I "$subdir/test.indv" -P "$subdir/unknowndna.pileup" -N "$sample_value" -O "$subdir/output_non_LD" --allele-freqs /Users/ouerghi1/output.frq
-            ./IBDGem-2.0.2/ibdgem --LD -H "$subdir/test.hap" -L "$subdir/test.legend" -I "$subdir/test.indv" -P "$subdir/unknowndna.pileup" -N "$sample_value" -O "$subdir/output_LD" --allele-freqs /Users/ouerghi1/output.frq
+            ./IBDGem-2.0.2/ibdgem -H "$subdir/test.hap" -L "$subdir/test.legend" -I "$subdir/test.indv" -P "$subdir/unknowndna.pileup" -N "$sample_value" -O "$subdir/output_non_LD" --allele-freqs "$subdir/output.frq" --sample "$sample_value"
+            ./IBDGem-2.0.2/ibdgem --LD -H "$subdir/test.hap" -L "$subdir/test.legend" -I "$subdir/test.indv" -P "$subdir/unknowndna.pileup" -N "$sample_value" -O "$subdir/output_LD" --allele-freqs "$subdir/output.frq" --sample "$sample_value"
         else
             echo "Files not found in $subdir"
         fi
